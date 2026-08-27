@@ -1,0 +1,47 @@
+name: AE3301 Phase 0 CI
+
+# This workflow IS the development environment for AE3301 right now:
+# there is no local machine to build or boot-test on, so every change
+# must build and boot-test here before it's considered working.
+# (See docs/roadmap/phase0-decisions.md, item 14.)
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-and-boot-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc binutils grub-pc-bin grub-common xorriso mtools qemu-system-x86
+
+      - name: Build kernel + ISO
+        run: make iso
+
+      - name: Boot in QEMU and capture serial output
+        run: |
+          timeout 20s qemu-system-x86_64 \
+            -cdrom build/ae3301.iso \
+            -serial file:serial.log \
+            -display none \
+            -no-reboot \
+            -m 256M \
+          || true
+          echo "---- serial.log ----"
+          cat serial.log || echo "(no serial.log produced)"
+
+      - name: Assert expected boot output
+        run: |
+          grep -q "AE3301 Phase 0: boot OK" serial.log
+
+      - name: Upload serial log artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: boot-serial-log
+          path: serial.log
