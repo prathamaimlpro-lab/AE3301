@@ -1,0 +1,52 @@
+name: AE3301 Phase 0 — Repeated Boot Test (Milestone 0.1)
+
+# Separate from ci.yml on purpose: that workflow runs on every push and
+# does a single boot check, which is the right thing for fast feedback.
+# This workflow boots the kernel 100 times, which is much slower and
+# only needs to run when actually closing out Milestone 0.1 — so it's
+# manual-trigger only (workflow_dispatch), not on every push.
+#
+# This does not modify, replace, or weaken ci.yml's existing check in
+# any way — both workflows can run independently.
+
+on:
+  workflow_dispatch:
+    inputs:
+      runs:
+        description: "Number of boots to run"
+        required: false
+        default: "100"
+
+jobs:
+  repeated-boot-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc binutils grub-pc-bin grub-common xorriso mtools qemu-system-x86
+
+      - name: Build kernel + ISO
+        run: make iso
+
+      - name: Run repeated boot test
+        run: |
+          chmod +x tests/boot_repeat_test.sh
+          ./tests/boot_repeat_test.sh "${{ github.event.inputs.runs }}" | tee repeat-test-output.log
+
+      - name: Upload full test output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: repeat-test-output
+          path: repeat-test-output.log
+
+      - name: Upload failure logs (if any)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: boot-repeat-failure-logs
+          path: build/boot-repeat-failures/
+          if-no-files-found: ignore
