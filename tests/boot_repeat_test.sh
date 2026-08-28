@@ -1,52 +1,49 @@
-name: AE3301 Phase 0 — Repeated Boot Test (Milestone 0.1)
+#!/usr/bin/env bash
+# Runs the Phase 0 kernel N times in QEMU and checks for the expected
+# serial output each time. This is the automated check behind
+# Milestone 0.1's exit criterion ("passes automated boot test 100/100
+# runs") from the AE3301 roadmap. Intended to run in CI (see
+# .github/workflows/ci.yml), not on the founder's local machine —
+# there isn't one.
+set -uo pipefail
 
-# Separate from ci.yml on purpose: that workflow runs on every push and
-# does a single boot check, which is the right thing for fast feedback.
-# This workflow boots the kernel 100 times, which is much slower and
-# only needs to run when actually closing out Milestone 0.1 — so it's
-# manual-trigger only (workflow_dispatch), not on every push.
-#
-# This does not modify, replace, or weaken ci.yml's existing check in
-# any way — both workflows can run independently.
+RUNS="${1:-100}"
+ISO="build/ae3301.iso"
+EXPECTED="AE3301 Phase 0: boot OK"
+FAIL_DIR="build/boot-repeat-failures"
+FAIL=0
 
-on:
-  workflow_dispatch:
-    inputs:
-      runs:
-        description: "Number of boots to run"
-        required: false
-        default: "100"
+if [ ! -f "$ISO" ]; then
+    echo "ISO not found at $ISO — run 'make iso' first." >&2
+    exit 2
+fi
 
-jobs:
-  repeated-boot-test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+mkdir -p "$FAIL_DIR"
 
-      - name: Install toolchain
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc binutils grub-pc-bin grub-common xorriso mtools qemu-system-x86
+for i in $(seq 1 "$RUNS"); do
+    LOG="$(mktemp)"
+    timeout 10s qemu-system-x86_64 \
+        -cdrom "$ISO" \
+        -serial "file:$LOG" \
+        -display none \
+        -no-reboot \
+        -m 256M >/dev/null 2>&1 || true
 
-      - name: Build kernel + ISO
-        run: make iso
+    if grep -q "$EXPECTED" "$LOG"; then
+        printf "run %3d/%d: OK\n" "$i" "$RUNS"
+        rm -f "$LOG"
+    else
+        printf "run %3d/%d: FAIL (no expected output)\n" "$i" "$RUNS"
+        FAIL=$((FAIL + 1))
+        cp "$LOG" "$FAIL_DIR/run-${i}.log"
+        rm -f "$LOG"
+    fi
+done
 
-      - name: Run repeated boot test
-        run: |
-          chmod +x tests/boot_repeat_test.sh
-          ./tests/boot_repeat_test.sh "${{ github.event.inputs.runs }}" | tee repeat-test-output.log
+echo "----"
+echo "Passed: $((RUNS - FAIL))/$RUNS"
 
-      - name: Upload full test output
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: repeat-test-output
-          path: repeat-test-output.log
-
-      - name: Upload failure logs (if any)
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: boot-repeat-failure-logs
-          path: build/boot-repeat-failures/
-          if-no-files-found: ignore
+if [ "$FAIL" -ne 0 ]; then
+    echo "Failure logs preserved in $FAIL_DIR/"
+    exit 1
+fi
