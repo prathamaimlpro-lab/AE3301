@@ -33,8 +33,9 @@ jobs:
 
       - name: Run repeated boot test
         run: |
+          set -o pipefail
           chmod +x tests/boot_repeat_test.sh
-          ./tests/boot_repeat_test.sh "${{ github.event.inputs.runs }}" | tee repeat-test-output.log
+          ./tests/boot_repeat_test.sh "${{ github.event.inputs.runs }}" 2>&1 | tee repeat-test-output.log
 
       - name: Upload full test output
         if: always()
