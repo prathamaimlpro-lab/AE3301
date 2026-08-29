@@ -17,7 +17,7 @@ CFLAGS  := -m64 -ffreestanding -fno-stack-protector -fno-pic -mno-red-zone \
 ASFLAGS := -m64
 LDFLAGS := -n -T kernel/linker.ld -nostdlib
 
-SRCS_C  := kernel/main.c kernel/arch/x86_64/serial.c
+SRCS_C  := kernel/main.c kernel/arch/x86_64/serial.c kernel/arch/x86_64/multiboot2.c
 SRCS_S  := kernel/arch/x86_64/boot.S
 OBJS    := $(SRCS_C:.c=.o) $(SRCS_S:.S=.o)
 
