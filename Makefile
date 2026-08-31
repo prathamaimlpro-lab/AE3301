@@ -13,7 +13,7 @@ AS      := gcc
 LD      := ld
 
 CFLAGS  := -m64 -ffreestanding -fno-stack-protector -fno-pic -mno-red-zone \
-           -mcmodel=kernel -Wall -Wextra -std=gnu11 -O2
+           -mcmodel=kernel -mgeneral-regs-only -Wall -Wextra -std=gnu11 -O2
 ASFLAGS := -m64
 LDFLAGS := -n -T kernel/linker.ld -nostdlib
 
